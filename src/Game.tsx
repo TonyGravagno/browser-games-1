@@ -17,7 +17,9 @@ export function Game(): JSX.Element {
     }
 
     // Bootstrap owns the game loop; React is only the host.
-    bootstrapGame(canvas);
+    const runtime = bootstrapGame(canvas);
+
+    return () => runtime.dispose();
   }, []);
 
   return (
