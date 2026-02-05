@@ -8,7 +8,7 @@ export function renderGame(
   ctx: CanvasRenderingContext2D,
   state: GameState
 ): void {
-  const { width, height } = ctx.canvas;
+  const { width, height } = state.viewport;
 
   ctx.clearRect(0, 0, width, height);
 

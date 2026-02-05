@@ -9,6 +9,15 @@ export interface InputState {
   down: boolean;
 }
 
+export interface InputHandle {
+  input: InputState;
+  /**
+   * Removes input listeners.
+   * Safe to call multiple times.
+   */
+  dispose(): void;
+}
+
 const KEY_TO_INTENT: Record<string, keyof InputState> = {
   ArrowLeft: "left",
   ArrowRight: "right",
@@ -24,7 +33,7 @@ const KEY_TO_INTENT: Record<string, keyof InputState> = {
  * Sets up browser input listeners and returns an InputState object
  * that is updated in response to events.
  */
-export function createInputState(): InputState {
+export function createInputState(): InputHandle {
   const input: InputState = {
     left: false,
     right: false,
@@ -40,8 +49,24 @@ export function createInputState(): InputState {
     }
   };
 
-  window.addEventListener("keydown", (event) => handleKey(event, true));
-  window.addEventListener("keyup", (event) => handleKey(event, false));
+  const handleKeyDown = (event: KeyboardEvent) => handleKey(event, true);
+  const handleKeyUp = (event: KeyboardEvent) => handleKey(event, false);
 
-  return input;
+  window.addEventListener("keydown", handleKeyDown);
+  window.addEventListener("keyup", handleKeyUp);
+
+  let disposed = false;
+
+  return {
+    input,
+    dispose: () => {
+      if (disposed) {
+        return;
+      }
+
+      disposed = true;
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+    },
+  };
 }

@@ -7,23 +7,36 @@ import { updateGame } from "./update";
 const DEFAULT_WIDTH = 320;
 const DEFAULT_HEIGHT = 180;
 
+export interface GameRuntime {
+  /**
+   * Stops the frame loop and removes all listeners.
+   * Safe to call multiple times.
+   */
+  dispose(): void;
+}
+
 const getCanvasSize = (canvas: HTMLCanvasElement) => {
-  const width = canvas.clientWidth || DEFAULT_WIDTH;
-  const height = canvas.clientHeight || DEFAULT_HEIGHT;
+  const rect = canvas.getBoundingClientRect();
+  const width = rect.width || canvas.clientWidth || DEFAULT_WIDTH;
+  const height = rect.height || canvas.clientHeight || DEFAULT_HEIGHT;
 
   return { width, height };
 };
 
-const resizeCanvas = (canvas: HTMLCanvasElement) => {
+const resizeCanvas = (
+  canvas: HTMLCanvasElement,
+  ctx: CanvasRenderingContext2D
+) => {
   const { width, height } = getCanvasSize(canvas);
-  const pixelRatio = window.devicePixelRatio || 1;
+  const dpr = window.devicePixelRatio || 1;
 
-  canvas.style.width = `${width}px`;
-  canvas.style.height = `${height}px`;
-  canvas.width = Math.floor(width * pixelRatio);
-  canvas.height = Math.floor(height * pixelRatio);
+  canvas.width = Math.floor(width * dpr);
+  canvas.height = Math.floor(height * dpr);
 
-  return { width: canvas.width, height: canvas.height, pixelRatio };
+  // Keep drawing coordinates in CSS pixels.
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  return { width, height, dpr };
 };
 
 /**
@@ -32,28 +45,44 @@ const resizeCanvas = (canvas: HTMLCanvasElement) => {
  * - Sets up input handlers
  * - Starts the frame loop
  */
-export function bootstrapGame(canvas: HTMLCanvasElement): void {
+export function bootstrapGame(canvas: HTMLCanvasElement): GameRuntime {
   const ctx = canvas.getContext("2d");
 
   if (!ctx) {
     throw new Error("2D rendering context not available.");
   }
 
-  const state = createInitialState();
-  const input = createInputState();
+  const viewport = resizeCanvas(canvas, ctx);
+  const state = createInitialState(viewport);
+  const inputHandle = createInputState();
 
   const applyResize = () => {
-    const { pixelRatio } = resizeCanvas(canvas);
+    const nextViewport = resizeCanvas(canvas, ctx);
 
-    // Keep drawing coordinates in CSS pixels.
-    ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+    state.viewport.width = nextViewport.width;
+    state.viewport.height = nextViewport.height;
+    state.viewport.dpr = nextViewport.dpr;
   };
 
-  applyResize();
   window.addEventListener("resize", applyResize);
 
-  startFrameLoop(
-    (dt) => updateGame(state, input, dt),
+  const loopHandle = startFrameLoop(
+    (dt) => updateGame(state, inputHandle.input, dt),
     () => renderGame(ctx, state)
   );
+
+  let disposed = false;
+
+  return {
+    dispose: () => {
+      if (disposed) {
+        return;
+      }
+
+      disposed = true;
+      loopHandle.stop();
+      window.removeEventListener("resize", applyResize);
+      inputHandle.dispose();
+    },
+  };
 }
